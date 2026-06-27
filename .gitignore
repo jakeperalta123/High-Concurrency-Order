@@ -2,6 +2,14 @@ HELP.md
 target/
 *.class
 .env
+.env.local
+.env.*
+!.env.example
+.envrc
+*.pem
+*.key
+*.p12
+*.crt
 .mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/
