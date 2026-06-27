@@ -161,7 +161,7 @@ ack.acknowledge(); // Commit offset immediately, dropping the duplicate event sa
 To stress-test the resilience of our asynchronous decoupled architecture, a massive high-load simulation was executed via **Apache JMeter**, with real-time JVM metrics captured using **JConsole**.
 
 ### Load Test Profile (JMeter Configuration)
-
+<img width="1339" height="579" alt="Image" src="https://github.com/user-attachments/assets/8c3c4ed1-7ebc-47fa-ad73-8ce9148e9f59" />
 * **Thread Group**: `3,000` concurrent users (threads) injected within a `1-second` ramp-up window.
 * **Execution**: Sustained burst traffic to simulate real-world flash-sale thundering herd behavior.
 * **Result**: **100% data consistency** across Redis and MySQL. Initial stock of 5,000 perfectly processed down to 2,000 with **zero over-selling, zero dropped messages, and zero errors**.
@@ -171,22 +171,22 @@ To stress-test the resilience of our asynchronous decoupled architecture, a mass
 ### Deep Dive into JVM Metrics (Captured via JConsole)
 
 #### 1. Heap Memory Usage — *The Elastic Sawtooth Pattern*
-
+<img width="1339" height="666" alt="Image" src="https://github.com/user-attachments/assets/471e06f8-2eef-4ab6-8c34-cf9e67c0ba24" />
 * **Observation**: Upon firing the load test, the JVM heap memory (`Used Heap`) climbed swiftly from a baseline of `150MB` up to a peak of approximately `390MB`. Immediately following the conclusion of the test, a GC event triggered a **sharp vertical drop**, plummeting the heap back down to less than `80MB`.
 * **Architectural Insight**: This rapid rise followed by a near-instantaneous plunge demonstrates an exceptionally healthy JVM ecosystem. It proves that high-concurrency short-lived components (DTOs, JSON strings, HTTP request objects) lose their references immediately post-execution. The **G1 Garbage Collector** seamlessly reclaims over 300MB of temporary garbage within milliseconds, keeping the Old Generation clean and entirely avoiding memory leaks.
 
 #### 2. Thread Pool Telemetry — *Elastic Lifecycle Management*
-
+<img width="1333" height="666" alt="Image" src="https://github.com/user-attachments/assets/17fec5c1-6d5f-4970-b253-a6bed46ebb1d" />
 * **Observation**: Under normal idle operations, the system maintains around `86` active threads. During the peak concurrent spike, live threads expanded dynamically to a peak of `280`, then smoothly decelerated back down to the `86`-thread baseline.
 * **Architectural Insight**: This maps perfectly to the expected behavior of the embedded Tomcat executive executor thread pool. Faced with 3,000 concurrent network sockets, Tomcat rapidly scales its worker thread pool to absorb the shockwave. Once the traffic subsides, idle worker threads hit their keep-alive timeouts and are gracefully destroyed, preventing thread deadlocks or resource starvation.
 
 #### 3. Class Loading Telemetry — *Rock-Solid Metaspace Baseline*
-
+<img width="1333" height="662" alt="Image" src="https://github.com/user-attachments/assets/b9ec88ee-545e-4583-9af4-2520108a1306" />
 * **Observation**: The total loaded class count remained absolutely static at `19,119` classes, resulting in a dead-flat horizontal line on the telemetry graph.
 * **Architectural Insight**: Operating enterprise-grade frameworks (Spring Boot, MyBatis-Plus, Kafka Clients, Redisson) inherently introduces an industry-standard metadata footprint (~1.9万 classes). The completely flat line verifies that under extreme concurrent load, the application is not triggering memory leaks in the Metaspace/Classloader layer via un-cached dynamic proxies or leaky class loaders.
 
 #### 4. CPU Usage Analysis — *The Asynchronous Decoupling Advantage*
-
+<img width="1636" height="844" alt="Image" src="https://github.com/user-attachments/assets/e4af2661-ee16-4208-86bd-98d73749b027" />
 * **Observation**: Despite handling a massive 3,000-user thundering herd, the JVM's CPU usage experienced only a minor, transient spike fluctuating between `1.5%` and `20%` during thread context creation. For the remainder of the lifecycle, the CPU cruised at near-idle thresholds.
 * **Architectural Insight**: This is the ultimate proof of **"Redis Pre-deduction + Kafka Asynchronous Peak-Shaving"** at work! The Web layer (`Tomcat`) handles lightweight, fast I/O bound requests—validating the request via Lua and instantly dispatching the payload into a Kafka broker before returning an immediate generic queueing response. The heavy CPU-bound compute tasks (ACID transactional DB writes) are safely offloaded to background consumer threads, drastically lowering CPU load and maximizing horizontal scalability.
 
