@@ -19,11 +19,11 @@ public class StockLog {
 
     private Long productId;
 
-    private Integer stockChange; // 異動數量，例如下單為 -1
+    private Integer stockChange; // Stock change amount, for example -1 for an order
 
-    private String type; // 異動類型，例如 "ORDER" 或 "REFUND"
+    private String type; // Change type, for example "ORDER" or "REFUND"
 
-    private String transactionId; // 對應的訂單編號 order_sn
+    private String transactionId; // Corresponding order number, order_sn
 
     @TableField(value = "created_at", fill = FieldFill.INSERT)
     private LocalDateTime createdAt;

@@ -7,6 +7,7 @@ import com.avalanche.high_concurrency_order.models.mapper.ProductMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -29,8 +30,12 @@ public class ProductController {
     }
 
     @PostMapping("/order")
-    public Result<String> placeOrder(@RequestParam Long productId, @RequestParam Integer quantity) {
-        orderService.placeOrder(productId, quantity);
+    public Result<String> placeOrder(
+            @RequestParam Long productId,
+            @RequestParam Integer quantity,
+            @RequestAttribute("userId") Long userId) {
+        orderService.placeOrder(userId, productId, quantity);
         return Result.success("Order placed successfully!");
     }
+
 }
