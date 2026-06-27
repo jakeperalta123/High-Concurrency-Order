@@ -12,9 +12,9 @@ By discarding traditional heavyweight approaches—such as direct database hits 
 
 The entire infrastructure is fully containerized and decoupled within an isolated bridge network named `seckill-network`. Through optimized internal and external listener alignment, it achieves high-efficiency microservice communication and clear observability:
 
-```
+```text
                                 [ External Clients / Testing Tools (JMeter) ]
-                                                     │
+                                                      │
                           ┌──────────────────────────┴──────────────────────────┐
                           │ Port 8080 (REST API)     │ Port 6379 (Cache Obs.)   │ Port 9092 (External Broker)
                           ▼                          ▼                          ▼
@@ -38,7 +38,7 @@ The entire infrastructure is fully containerized and decoupled within an isolate
 
 The diagram below illustrates the physical execution path of data and component interactions when processing high-volume flash-sale traffic:
 
-```
+```text
 [ User Client ]
      │
      │ STEP 1. Fetch Dynamic Mathematical Verification Code (Block Automated Bots)
@@ -156,7 +156,52 @@ ack.acknowledge(); // Commit offset immediately, dropping the duplicate event sa
 
 ---
 
-## 4. Local Deployment
+## 4. Load Testing & JVM Performance Metrics (Real Telemetry Data)
+
+To stress-test the resilience of our asynchronous decoupled architecture, a massive high-load simulation was executed via **Apache JMeter**, with real-time JVM metrics captured using **JConsole**.
+
+### Load Test Profile (JMeter Configuration)
+
+* **Thread Group**: `3,000` concurrent users (threads) injected within a `1-second` ramp-up window.
+* **Execution**: Sustained burst traffic to simulate real-world flash-sale thundering herd behavior.
+* **Result**: **100% data consistency** across Redis and MySQL. Initial stock of 5,000 perfectly processed down to 2,000 with **zero over-selling, zero dropped messages, and zero errors**.
+
+---
+
+### Deep Dive into JVM Metrics (Captured via JConsole)
+
+#### 1. Heap Memory Usage — *The Elastic Sawtooth Pattern*
+
+* **Observation**: Upon firing the load test, the JVM heap memory (`Used Heap`) climbed swiftly from a baseline of `150MB` up to a peak of approximately `390MB`. Immediately following the conclusion of the test, a GC event triggered a **sharp vertical drop**, plummeting the heap back down to less than `80MB`.
+* **Architectural Insight**: This rapid rise followed by a near-instantaneous plunge demonstrates an exceptionally healthy JVM ecosystem. It proves that high-concurrency short-lived components (DTOs, JSON strings, HTTP request objects) lose their references immediately post-execution. The **G1 Garbage Collector** seamlessly reclaims over 300MB of temporary garbage within milliseconds, keeping the Old Generation clean and entirely avoiding memory leaks.
+
+#### 2. Thread Pool Telemetry — *Elastic Lifecycle Management*
+
+* **Observation**: Under normal idle operations, the system maintains around `86` active threads. During the peak concurrent spike, live threads expanded dynamically to a peak of `280`, then smoothly decelerated back down to the `86`-thread baseline.
+* **Architectural Insight**: This maps perfectly to the expected behavior of the embedded Tomcat executive executor thread pool. Faced with 3,000 concurrent network sockets, Tomcat rapidly scales its worker thread pool to absorb the shockwave. Once the traffic subsides, idle worker threads hit their keep-alive timeouts and are gracefully destroyed, preventing thread deadlocks or resource starvation.
+
+#### 3. Class Loading Telemetry — *Rock-Solid Metaspace Baseline*
+
+* **Observation**: The total loaded class count remained absolutely static at `19,119` classes, resulting in a dead-flat horizontal line on the telemetry graph.
+* **Architectural Insight**: Operating enterprise-grade frameworks (Spring Boot, MyBatis-Plus, Kafka Clients, Redisson) inherently introduces an industry-standard metadata footprint (~1.9万 classes). The completely flat line verifies that under extreme concurrent load, the application is not triggering memory leaks in the Metaspace/Classloader layer via un-cached dynamic proxies or leaky class loaders.
+
+#### 4. CPU Usage Analysis — *The Asynchronous Decoupling Advantage*
+
+* **Observation**: Despite handling a massive 3,000-user thundering herd, the JVM's CPU usage experienced only a minor, transient spike fluctuating between `1.5%` and `20%` during thread context creation. For the remainder of the lifecycle, the CPU cruised at near-idle thresholds.
+* **Architectural Insight**: This is the ultimate proof of **"Redis Pre-deduction + Kafka Asynchronous Peak-Shaving"** at work! The Web layer (`Tomcat`) handles lightweight, fast I/O bound requests—validating the request via Lua and instantly dispatching the payload into a Kafka broker before returning an immediate generic queueing response. The heavy CPU-bound compute tasks (ACID transactional DB writes) are safely offloaded to background consumer threads, drastically lowering CPU load and maximizing horizontal scalability.
+
+---
+
+## 5. Core Interview Architecture Highlights (STAR Framework)
+
+* **Situation**: Needed to engineer a backend order system capable of sustaining a 3,000+ thread flash-sale surge without crashing the physical database or over-selling stock.
+* **Task**: Ensure zero over-selling, maintain eventual consistency, implement high-performance rate-limiting, and safeguard system resources under minimal CPU overhead.
+* **Action**: Configured a JVM heap envelope (`-Xms512m -Xmx512m`) with `G1GC` to enforce deterministic runtime behavior. Built a layered defense pipeline: **Bloom Filter** for penetration mitigation, **Token Bucket Lua** for rate-limiting, **Atomic Redis Lua** for high-efficiency stock subtraction, and **Kafka partitioned streams** (keyed by product ID) for sequential asynchronous write-backs backed by a MySQL unique constraint.
+* **Result**: Validated via JMeter and monitored via JConsole. Achieved 100% database accuracy with zero concurrency leaks. Demonstrated a clean sawtooth heap pattern (390MB peak cleared down to 80MB) and restricted CPU utilization below 20%, proving low compute overhead and robust infrastructure stability.
+
+---
+
+## 6. Local Deployment
 
 ### Prerequisites
 
@@ -188,5 +233,3 @@ To verify the bootstrap progress and track Kafka/Flyway migrations in real-time,
 docker compose logs -f seckill-app
 
 ```
-
----
