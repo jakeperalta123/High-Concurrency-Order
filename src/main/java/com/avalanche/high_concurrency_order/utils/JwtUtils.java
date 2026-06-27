@@ -7,8 +7,10 @@ import org.springframework.stereotype.Component;
 
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
+import lombok.extern.slf4j.Slf4j;
 
 @Component
+@Slf4j
 public class JwtUtils {
 
     @Value("${jwt.secret}")
@@ -17,21 +19,22 @@ public class JwtUtils {
     @Value("${jwt.expiration}")
     private long expiration;
 
-    public String generateToken(String username) {
+    public String generateToken(Long userId) {
         return Jwts.builder()
-                .setSubject(username)
+                .setSubject(String.valueOf(userId))
                 .setIssuedAt(new Date())
                 .setExpiration(new Date(System.currentTimeMillis() + expiration))
                 .signWith(SignatureAlgorithm.HS256, secret)
                 .compact();
     }
 
-    public String getUsernameFromToken(String token) {
-        return Jwts.parser()
+    public Long getUserIdFromToken(String token) {
+        String subject = Jwts.parser()
                 .setSigningKey(secret)
                 .parseClaimsJws(token)
                 .getBody()
                 .getSubject();
+        return Long.parseLong(subject);
     }
 
     public boolean validateToken(String token) {
@@ -39,15 +42,15 @@ public class JwtUtils {
             Jwts.parser().setSigningKey(secret).parseClaimsJws(token);
             return true;
         } catch (io.jsonwebtoken.SignatureException e) {
-            System.out.println("Invalid JWT signature");
+            log.warn("Invalid JWT signature");
         } catch (io.jsonwebtoken.MalformedJwtException e) {
-            System.out.println("JWT form error");
+            log.warn("JWT format error");
         } catch (io.jsonwebtoken.ExpiredJwtException e) {
-            System.out.println("JWT expired");
+            log.warn("JWT expired");
         } catch (io.jsonwebtoken.UnsupportedJwtException e) {
-            System.out.println("Unsupported JWT type");
+            log.warn("Unsupported JWT type");
         } catch (IllegalArgumentException e) {
-            System.out.println("JWT token is empty");
+            log.warn("JWT token is empty");
         }
         return false;
     }

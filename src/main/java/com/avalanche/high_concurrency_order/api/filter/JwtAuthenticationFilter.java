@@ -3,15 +3,15 @@ package com.avalanche.high_concurrency_order.api.filter;
 import java.io.IOException;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.actuate.endpoint.SecurityContext;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
+import com.avalanche.high_concurrency_order.core.security.SecurityUser;
+import com.avalanche.high_concurrency_order.models.mapper.UserMapper;
 import com.avalanche.high_concurrency_order.utils.JwtUtils;
 
 import jakarta.servlet.FilterChain;
@@ -26,33 +26,40 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private JwtUtils jwtUtils;
 
     @Autowired
-    private UserDetailsService userDetailService;
+    private UserMapper userMapper;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterchain)
             throws ServletException, IOException {
 
         String authHeader = request.getHeader("Authorization");
-        String token = null;
-        String username = null;
 
-        if (authHeader != null && authHeader.startsWith("Bearer")) {
-            token = authHeader.substring(7);
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            String token = authHeader.substring(7);
+
             if (jwtUtils.validateToken(token)) {
-                username = jwtUtils.getUsernameFromToken(token);
+                Long userId = jwtUtils.getUserIdFromToken(token);
+
+                if (userId != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+
+                    com.avalanche.high_concurrency_order.models.entity.User user = userMapper.selectById(userId);
+
+                    if (user != null) {
+                        SecurityUser securityUser = new SecurityUser(
+                                user.getId(),
+                                user.getUsername(),
+                                user.getPasswordHash(),
+                                new java.util.ArrayList<>());
+
+                        UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
+                                securityUser, null, securityUser.getAuthorities());
+
+                        authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+
+                        SecurityContextHolder.getContext().setAuthentication(authentication);
+                    }
+                }
             }
-
-        }
-
-        if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-            UserDetails userDetails = this.userDetailService.loadUserByUsername(username);
-
-            UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(userDetails,
-                    null, userDetails.getAuthorities());
-
-            authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-
-            SecurityContextHolder.getContext().setAuthentication(authentication);
         }
 
         filterchain.doFilter(request, response);

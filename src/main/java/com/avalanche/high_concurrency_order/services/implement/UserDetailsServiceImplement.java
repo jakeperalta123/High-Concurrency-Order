@@ -8,6 +8,7 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
+import com.avalanche.high_concurrency_order.core.security.SecurityUser;
 import com.avalanche.high_concurrency_order.models.entity.User;
 import com.avalanche.high_concurrency_order.models.mapper.UserMapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -20,7 +21,6 @@ public class UserDetailsServiceImplement implements UserDetailsService {
 
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-
         User user = userMapper.selectOne(
                 new LambdaQueryWrapper<User>().eq(User::getUsername, username));
 
@@ -28,12 +28,10 @@ public class UserDetailsServiceImplement implements UserDetailsService {
             throw new UsernameNotFoundException("Unable to find user: " + username);
         }
 
-        return org.springframework.security.core.userdetails.User.builder()
-                .username(user.getUsername())
-                .password(user.getPasswordHash())
-                // if you wanna design functions for admin, then you need to comeback here to
-                // fix this
-                .authorities(new ArrayList<>())
-                .build();
+        return new SecurityUser(
+                user.getId(),
+                user.getUsername(),
+                user.getPasswordHash(),
+                new ArrayList<>());
     }
 }

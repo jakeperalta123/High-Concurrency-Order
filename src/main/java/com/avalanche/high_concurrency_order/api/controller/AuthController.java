@@ -1,10 +1,6 @@
 package com.avalanche.high_concurrency_order.api.controller;
 
-import java.util.HashMap;
-import java.util.Map;
-
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -17,6 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.avalanche.high_concurrency_order.api.request.LoginRequest;
 import com.avalanche.high_concurrency_order.api.response.LoginResponse;
 import com.avalanche.high_concurrency_order.api.response.Result;
+import com.avalanche.high_concurrency_order.core.security.SecurityUser;
 import com.avalanche.high_concurrency_order.utils.JwtUtils;
 
 @RestController
@@ -37,9 +34,13 @@ public class AuthController {
 
         Authentication authentication = authenticationManager.authenticate(authenticationToken);
 
-        SecurityContextHolder.getContext().setAuthentication(authentication);
+        SecurityUser userDetails = (SecurityUser) authentication.getPrincipal();
 
-        String jwt = jwtUtils.generateToken(loginRequest.getUsername());
+        Long realUserId = userDetails.getUserId();
+
+        String jwt = jwtUtils.generateToken(realUserId);
+
+        SecurityContextHolder.getContext().setAuthentication(authentication);
 
         return Result.success(new LoginResponse(jwt, "Bearer"));
     }
